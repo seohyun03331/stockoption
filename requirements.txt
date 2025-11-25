@@ -1,0 +1,7 @@
+Flask
+pandas
+pykrx
+openpyxl
+requests
+gunicorn
+setuptools

@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>한국 주식 종목 검색기</title>
+
+  <style>
+    :root{
+      --bg1:#0f172a;
+      --bg2:#111827;
+      --glass: rgba(255,255,255,0.08);
+      --glass2: rgba(255,255,255,0.12);
+      --line: rgba(255,255,255,0.12);
+      --text:#e5e7eb;
+      --muted:#9ca3af;
+      --accent:#7c3aed;
+      --accent2:#22c55e;
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      background:radial-gradient(1200px 600px at 5% -10%, #1d4ed8, transparent),
+                 radial-gradient(900px 500px at 110% 0%, #7c3aed, transparent),
+                 linear-gradient(160deg, var(--bg1), var(--bg2));
+      min-height:100vh;
+      font-family:-apple-system, system-ui, sans-serif;
+      color:var(--text);
+    }
+
+    .wrap{
+      max-width:1200px;
+      margin:24px auto;
+      padding:16px;
+      display:grid;
+      gap:14px;
+    }
+
+    .card{
+      background:var(--glass);
+      padding:16px;
+      border-radius:18px;
+      border:1px solid var(--line);
+      backdrop-filter:blur(12px);
+      box-shadow:0 10px 30px rgba(0,0,0,0.35);
+    }
+
+    header.card{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:18px;
+    }
+
+    h1{ margin:0; font-size:22px; font-weight:700; }
+
+    .meta{
+      font-size:14px; color:var(--muted);
+      display:flex; align-items:center; gap:8px;
+    }
+
+    .dot{
+      width:6px; height:6px; border-radius:50%;
+      background:var(--accent2);
+      box-shadow:0 0 10px var(--accent2);
+    }
+
+    .controls{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+    }
+
+    .radio{
+      background:var(--glass2);
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px solid var(--line);
+      display:flex; gap:6px; align-items:center;
+      cursor:pointer;
+      transition:0.2s;
+      user-select:none;
+    }
+    .radio:hover{ transform:translateY(-1px); }
+
+    button{
+      padding:10px 14px;
+      border-radius:12px;
+      border:none;
+      color:white;
+      font-weight:700;
+      cursor:pointer;
+      transition:0.25s;
+      display:flex; align-items:center; gap:6px;
+    }
+
+    #btn{
+      margin-left:auto;
+      background:linear-gradient(135deg, var(--accent), #2563eb);
+      box-shadow:0 8px 20px rgba(124,58,237,0.35);
+    }
+
+    #downloadBtn{
+      background:linear-gradient(135deg, #10b981, #22c55e);
+      box-shadow:0 8px 20px rgba(34,197,94,0.25);
+    }
+
+    .stats{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:space-between;
+      gap:10px;
+      font-size:14px;
+    }
+
+    .badge{
+      padding:6px 12px;
+      border-radius:999px;
+      background:rgba(255,255,255,0.08);
+      border:1px solid var(--line);
+    }
+
+    .table-card{ padding:0; overflow:auto; }
+
+    table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      min-width:900px;
+      font-size:14px;
+    }
+
+    th{
+      position:sticky; top:0;
+      background:rgba(15,23,42,0.9);
+      padding:10px 8px;
+      font-weight:700;
+      border-bottom:1px solid var(--line);
+      z-index:3;
+    }
+    td{
+      padding:9px 8px;
+      border-bottom:1px solid rgba(255,255,255,0.06);
+      background:rgba(255,255,255,0.02);
+    }
+    td.num{ text-align:right; }
+    td.left{ text-align:left; font-weight:600; }
+
+    tr:hover td{ background:rgba(124,58,237,0.08);}
+
+    .link-btn{
+      text-decoration:none;
+      padding:5px 8px;
+      border-radius:10px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,0.08);
+      color:var(--text);
+      font-size:12px;
+      font-weight:600;
+      white-space:nowrap;
+    }
+  </style>
+</head>
+
+<body>
+<div class="wrap">
+
+  <header class="card">
+    <h1>📈 한국 주식 종목 검색기</h1>
+    <div class="meta">
+      <span class="dot"></span>
+      <span id="baseDate">데이터 기준일: -</span>
+    </div>
+  </header>
+
+  <section class="card controls">
+    <label class="radio"><input type="radio" name="t" value="1"> 안정추구형</label>
+    <label class="radio"><input type="radio" name="t" value="2" checked> 안정성장형</label>
+    <label class="radio"><input type="radio" name="t" value="3"> 적극성장형</label>
+
+    <button id="btn">종목 검색</button>
+    <button id="downloadBtn">엑셀 다운로드</button>
+  </section>
+
+  <section class="card stats">
+    <span class="badge" id="summary">총 0개 종목</span>
+    <span class="badge" id="ruleInfo">필터: -</span>
+  </section>
+
+  <section class="card table-card">
+    <table>
+      <thead><tr id="thead"></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </section>
+
+</div>
+
+<script>
+const API = "/api/stocks";
+let raw = null;
+
+function toNum(x){ const n = Number(x); return Number.isFinite(n)?n:NaN; }
+function fmt(n,d=2){ return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):""; }
+
+function quantile(arr,q){
+  const a = arr.filter(Number.isFinite).sort((a,b)=>a-b);
+  if(!a.length) return NaN;
+  const p=(a.length-1)*q;
+  const b=Math.floor(p);
+  const r=p-b;
+  return a[b+1] ? a[b]+r*(a[b+1]-a[b]) : a[b];
+}
+
+function filter(rows,type){
+  let PER_max,PBR_max,ROE_min,DY_min,CAP_min,ruleLabel,sort_key;
+  const caps = rows.map(r=>r["시가총액"]);
+
+  if(type==="1"){
+    PER_max=12;PBR_max=1.2;ROE_min=5;DY_min=3;
+    CAP_min=quantile(caps,0.8);
+    sort_key="배당수익률";
+    ruleLabel="PER<12, PBR<1.2, ROE>5, DY>3, 시총 상위20%";
+  } else if(type==="3"){
+    PER_max=50;PBR_max=5;ROE_min=15;DY_min=0;
+    CAP_min=0;
+    sort_key="ROE";
+    ruleLabel="PER<50, PBR<5, ROE>15";
+  } else {
+    PER_max=20;PBR_max=2;ROE_min=10;DY_min=1.5;
+    CAP_min=quantile(caps,0.5);
+    sort_key="ROE";
+    ruleLabel="PER<20, PBR<2, ROE>10, DY>1.5, 시총 상위50%";
+  }
+
+  const out = rows.filter(r=>
+    r.PER<PER_max &&
+    r.PBR<PBR_max &&
+    r.ROE>ROE_min &&
+    r["배당수익률"]>DY_min &&
+    r["시가총액"]>CAP_min
+  );
+
+  out.sort((a,b)=> (b[sort_key]??0)-(a[sort_key]??0));
+  return {out,ruleLabel};
+}
+
+function makeLinks(name){
+  const q=encodeURIComponent(name);
+  return {
+    price:`https://search.naver.com/search.naver?query=${q}+주가`,
+    naver:`https://search.naver.com/search.naver?where=news&query=${q}`,
+    daum:`https://search.daum.net/search?w=news&q=${q}`
+  };
+}
+
+function render(rows){
+  const head=["종목명","종목코드","PER","PBR","ROE","배당수익률","시가총액(억원)"];
+  document.getElementById("thead").innerHTML =
+    head.map(c=>`<th>${c}</th>`).join("") +
+    "<th>주가</th><th>네이버</th><th>다음</th>";
+
+  const tbody=document.getElementById("tbody");
+  tbody.innerHTML="";
+
+  rows.forEach(r=>{
+    const l = makeLinks(r["종목명"]);
+    const tr=document.createElement("tr");
+
+    head.forEach(c=>{
+      let v=r[c];
+      if(["PER","PBR","ROE","배당수익률"].includes(c)) v=fmt(v);
+      if(c==="시가총액(억원)") v=fmt(v,0);
+      const td=document.createElement("td");
+      td.className=(c==="종목명"||c==="종목코드")?"left":"num";
+      td.textContent=v??"";
+      tr.append(td);
+    });
+
+    tr.insertAdjacentHTML("beforeend",`
+      <td><a class='link-btn' href='${l.price}' target='_blank'>주가</a></td>
+      <td><a class='link-btn' href='${l.naver}' target='_blank'>뉴스</a></td>
+      <td><a class='link-btn' href='${l.daum}' target='_blank'>다음</a></td>
+    `);
+
+    tbody.append(tr);
+  });
+}
+
+async function init(){
+  const res=await fetch(API);
+  const data=await res.json();
+  raw=data;
+  document.getElementById("baseDate").textContent=`데이터 기준일: ${data.baseDate}`;
+}
+
+init();
+
+document.getElementById("btn").addEventListener("click",()=>{
+  if(!raw) return alert("데이터 로딩 중");
+
+  const type=document.querySelector("input[name=t]:checked").value;
+  const rows = raw.data.map(r=>({
+    ...r,
+    PER:toNum(r.PER),
+    PBR:toNum(r.PBR),
+    ROE:toNum(r.ROE),
+    "배당수익률":toNum(r["배당수익률"]),
+    "시가총액":toNum(r["시가총액"]),
+    "시가총액(억원)":toNum(r["시가총액(억원)"]),
+  }));
+
+  const {out,ruleLabel}=filter(rows,type);
+
+  document.getElementById("summary").textContent=`총 ${out.length}개 종목`;
+  document.getElementById("ruleInfo").textContent=`필터: ${ruleLabel}`;
+
+  render(out);
+});
+
+document.getElementById("downloadBtn").addEventListener("click",()=>{
+  const type=document.querySelector("input[name=t]:checked").value;
+  window.location.href=`/download.xlsx?choice=${type}`;
+});
+</script>
+
+</body>
+</html>
